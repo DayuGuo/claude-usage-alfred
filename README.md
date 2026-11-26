@@ -1,8 +1,10 @@
 # Claude Usage for Alfred
 
+**English** · [简体中文](README.zh-CN.md)
+
 Open Alfred and type `usage` to see Claude Code and Codex plan limits, reset times, and 13 weeks of activity. The panel also estimates what your locally recorded requests would cost at API list prices.
 
-[Download the Alfred workflow](https://github.com/yinan-c/claude-usage-alfred/releases/download/v1.1.0-rc.1/Claude-Usage.alfredworkflow) · [Release notes](https://github.com/yinan-c/claude-usage-alfred/releases/tag/v1.1.0-rc.1) · [中文使用教程](#中文使用教程)
+[Download the Alfred workflow](https://github.com/yinan-c/claude-usage-alfred/releases/download/v1.1.0-rc.1/Claude-Usage.alfredworkflow) · [Release notes](https://github.com/yinan-c/claude-usage-alfred/releases/tag/v1.1.0-rc.1)
 
 ## Install and open
 
@@ -26,7 +28,7 @@ Open **Alfred Preferences → Workflows → Claude Usage → Configure Workflow*
 
 **Quota and activity measure different things.** A weekly bar at 26% means the provider reported 26% of that quota used. The heatmap counts local CLI activity. If Codex reports only a weekly window, the panel shows only that window. After a reset, the panel waits for a new reading before showing a percentage.
 
-**Cost estimates** cover the current week (from Monday), calendar month and optional subscription cycle. Enter the cycle start and renewal dates separately for each provider. For example, June 10 to July 10 includes June 10 through July 9. A `+` after a dollar amount means some requests have no known price. Hover over a period total for the covered dates.
+**Cost estimates** cover the current week (from Monday), calendar month and optional subscription cycle. Enter the cycle start and renewal dates for each provider in `YYYY-MM-DD` format. For example, June 10 to July 10 includes June 10 through July 9. A `+` after a dollar amount means some requests have no known price. Hover over a period total for the covered dates.
 
 ## Set up Claude quota readings
 
@@ -56,14 +58,6 @@ Local Claude activity appears from transcripts in `~/.claude/projects`. For quot
   3. Start a Claude Code session and send a message. When the status line receives quota data, it saves the reading in `~/.claude/usage-limits.json`. Open `usage claude` in Alfred and press ⌘R.
 
 If you use a custom Claude configuration directory, set **Claude config folder** to that location and adjust the script and settings paths accordingly. The Codex equivalent is **Codex folder**, which defaults to `~/.codex` and includes both active and archived sessions.
-
-## 中文使用教程
-
-1. **安装**　在上方下载 `Claude-Usage.alfredworkflow`，双击后在 Alfred 中选择 **Import**。需要 macOS、Alfred Powerpack 和系统 Python 3。
-2. **打开面板**　唤出 Alfred，输入 `usage` 并回车。也可以输入 `usage codex` 或 `usage claude` 直接打开对应标签。按 Tab 切换，⌘R 刷新，回车打开当前服务的官方用量页。
-3. **选择服务**　在 **Alfred Preferences → Workflows → Claude Usage → Configure Workflow → Show providers** 选择只显示一个、固定先后顺序，或记住上次的标签。
-4. **查看额度**　默认读取本机记录。Codex 只返回周额度时，面板仅显示周额度。Claude 有活动但没有额度时，可勾选 **Live account limits** 后刷新，或按上方步骤安装状态栏脚本并使用一次 Claude Code。
-5. **看懂统计**　把鼠标放在热力图方格上，可以看到当天的请求数和 API 估算费用。要统计订阅周期，请分别填写每个服务的开始日和续费日，格式为 `YYYY-MM-DD`，续费日计入下一周期。金额后的 `+` 表示有部分请求缺少价格。
 
 ## Data and development
 
