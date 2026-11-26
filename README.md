@@ -6,10 +6,11 @@ An [Alfred](https://www.alfredapp.com) workflow that shows your Claude Code and 
 
 ## Features
 
-- **Limits:** how much of your 5-hour session and weekly limits you've used, and when each window resets
+- **Limits:** usage and reset times for the windows your account reports, including weekly-only accounts
 - **Activity:** a 13-week heatmap of your usage, with your current streak 🔥
 - **Cost:** what the same tokens would cost at API list prices. This is an estimate; your plan is not billed this way. Hover a day to see its cost and request count.
-- **Claude and Codex tabs:** the tab you viewed last opens next time
+- **Period totals:** request count and estimated cost for this week, this month and an optional subscription cycle. A + marks a subtotal with unpriced requests.
+- **Claude and Codex tabs:** switch immediately while usage loads in the background. Reopen the last tab, choose a fixed order or show just one provider
 
 ## Requirements
 
@@ -36,7 +37,7 @@ git archive --format=zip -o Claude-Usage.alfredworkflow HEAD
 
 ### Set up the status line (Claude limits)
 
-Claude Code reports plan limits only to its status line, and nothing else saves them. This workflow ships `statusline.py`, which prints a compact status line and saves the latest limits to `~/.claude/usage-limits.json`.
+The workflow reads Claude plan limits from the status line cache by default. This workflow ships `statusline.py`, which prints a compact status line and saves the latest limits to `~/.claude/usage-limits.json`.
 
 ```sh
 cp statusline.py ~/.claude/statusline-usage.py
@@ -74,6 +75,9 @@ Open the workflow in Alfred and click **Configure Workflow**:
 
 - **Keyword:** defaults to `usage`
 - **Claude config folder:** defaults to `~/.claude`. Change it only if you use `CLAUDE_CONFIG_DIR`.
+- **Show providers:** defaults to both providers with the last viewed tab selected. Choose a fixed first tab or enable one provider. A keyword argument selects an enabled tab for that launch.
+- **Subscription dates:** enter each provider’s start and renewal dates as YYYY-MM-DD. The renewal date belongs to the next cycle.
+- **Live account limits:** optionally query the signed-in Codex and Claude Code CLIs for quota data. If a CLI is unavailable or cannot report limits, the workflow uses local data.
 - **Codex folder:** defaults to `~/.codex`. Change it only if you use `CODEX_HOME`.
 
 ## Where the numbers come from
@@ -85,13 +89,13 @@ Open the workflow in Alfred and click **Configure Workflow**:
 
 **Codex**
 
-- Limits, activity and cost all come from Codex's session files in `~/.codex/sessions`. Each API response records its tokens, and the plan limits come with it. Limits are as of your last Codex request. Costs use OpenAI API rates.
+- Limits, activity and cost are read by default from Codex’s `sessions` and `archived_sessions` folders. Each API response records its tokens, and the plan limits come with it. Limits are as of your last Codex request. Costs use OpenAI API rates.
 
 ## Privacy
 
-- Everything runs locally. The workflow makes no network requests; ↩ just opens your usage settings page in the browser.
+- The default configuration reads local files. Enabling **Live account limits** lets the installed CLIs contact their providers to check your quota. Pressing ↩ opens the selected provider’s usage settings in your browser.
 - From transcripts and session files it reads only timestamps, model names, token counts and request IDs, never message content.
-- It writes only two things: `~/.claude/usage-limits.json` (from the status line script) and a cache of per-file totals in Alfred's workflow cache folder.
+- Usage data is written to `~/.claude/usage-limits.json` (from the status line script) and a cache of per-file totals in Alfred's workflow cache folder.
 
 ## Updating prices
 
