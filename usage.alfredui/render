@@ -1,0 +1,364 @@
+#!/usr/bin/python3
+"""Alfred UI script for Claude Usage: prints JSON actions that fill in the UI.
+
+Usage: render preload|pulse|refresh|switch|toggle [claude|codex]
+  preload  build the activity heatmap and fill every label (runs before the UI is shown)
+  pulse    refresh labels, bars and heatmap colours in place (every 30s while open, and on ⌘R)
+  switch   show the given tool; toggle shows the other one
+The tool defaults to $tool, the UI variable remembering the last tab.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import codex  # noqa: E402
+import usage  # noqa: E402
+
+TOOLS = ("claude", "codex")
+TITLES = {"claude": "Claude usage", "codex": "Codex usage"}
+USAGE_URLS = {"claude": "https://claude.ai/settings/usage", "codex": codex.USAGE_URL}
+LIMITS_SOURCE = {"claude": "the status line", "codex": "your last Codex session"}
+
+WEEKS = 13
+CELL = 15
+GAP = 3
+GRID_W = WEEKS * CELL + (WEEKS - 1) * GAP
+GRID_H = 7 * CELL + 6 * GAP
+DAY_W, DAY_GAP = 26, 4  # weekday labels column, left of the grid
+MONTH_H, MONTH_GAP = 13, 3  # month labels row, above the grid
+HEAT_W = DAY_W + DAY_GAP + GRID_W  # keep in sync with the "heatmap" placeholder in ui.json
+HEAT_H = MONTH_H + MONTH_GAP + GRID_H
+WEEKDAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""]  # rows run Sunday to Saturday
+AXIS_FONT = {"size": 10}
+
+EMPTY = {"light": "#00000014", "dark": "#ffffff17"}
+FUTURE = {"light": "#00000008", "dark": "#ffffff0a"}
+LEVELS = [
+    {"light": "#9be9a8", "dark": "#0e4429"},
+    {"light": "#40c463", "dark": "#006d32"},
+    {"light": "#30a14e", "dark": "#26a641"},
+    {"light": "#216e39", "dark": "#39d353"},
+]
+TODAY_BORDER = {"light": "#000000b0", "dark": "#ffffffd0"}
+TRACK = {"light": "#0000001f", "dark": "#00000059"}
+
+
+# ---------------------------------------------------------------- formatting
+
+def money(x: float) -> str:
+    if x >= 100:
+        return f"${x:,.0f}"
+    return f"${x:,.2f}"
+
+
+def short_date(d: date) -> str:
+    return f"{d:%b} {d.day}"
+
+
+def duration(seconds: float) -> str:
+    m = max(1, int(round(seconds / 60)))
+    if m < 60:
+        return f"{m}m"
+    h, m = divmod(m, 60)
+    if h < 24:
+        return f"{h}h {m}m" if m else f"{h}h"
+    d, h = divmod(h, 24)
+    return f"{d}d {h}h" if h else f"{d}d"
+
+
+def ago(seconds: float) -> str:
+    if seconds < 90:
+        return "just now"
+    if seconds >= 2 * 86400:
+        return f"{int(seconds // 86400)}d ago"
+    return f"{duration(seconds)} ago"
+
+
+def bar_colour(pct: float) -> str:
+    if pct >= 90:
+        return "systemRedColor"
+    if pct >= 75:
+        return "systemOrangeColor"
+    return "systemGreenColor"
+
+
+# ---------------------------------------------------------------- limits
+
+def window_label(minutes: Optional[int]) -> str:
+    if minutes == 300:
+        return "5-hour session"
+    if minutes == 10080:
+        return "Weekly"
+    if minutes and minutes % 1440 == 0:
+        return f"{minutes // 1440}-day"
+    if minutes:
+        return f"{round(minutes / 60)}-hour"
+    return "Limit"
+
+
+def limit_rows(limits: Optional[dict], now: float, missing: str) -> Dict[str, dict]:
+    """Top row: the shorter window (a day or less), bottom row: the longer one."""
+    windows = (limits or {}).get("windows") or []
+    short = [w for w in windows if (w.get("minutes") or 0) <= 1440]
+    long = [w for w in windows if (w.get("minutes") or 0) > 1440]
+    ids = {}
+    for prefix, found, fallback in (("five", short, "5-hour session"), ("week", long, "Weekly")):
+        if found:
+            w = min(found, key=lambda x: x.get("minutes") or 0) if prefix == "five" else max(found, key=lambda x: x.get("minutes") or 0)
+            ids.update(limit_row(prefix, window_label(w.get("minutes")), w, now))
+        else:
+            ids.update(limit_row(prefix, fallback, None, now, missing if not windows else "not reported"))
+    return ids
+
+
+def limit_row(prefix: str, label: str, window: Optional[dict], now: float, missing: str = "no data yet") -> Dict[str, dict]:
+    if not window or window.get("used_percentage") is None:
+        return {
+            f"{prefix}Label": {"text": f"{label}: {missing}"},
+            f"{prefix}Bar": {"progress": 0.0, "colour": "systemGreenColor"},
+        }
+    pct = float(window["used_percentage"])
+    resets = window.get("resets_at")
+    if resets and resets <= now:
+        # The window rolled over since Claude Code last reported it.
+        text = f"{label}: 0% used (reset {ago(now - resets)})"
+        pct = 0.0
+    elif window.get("limited") and resets:
+        text = f"{label}: limit reached, resets in {duration(resets - now)}"
+    elif resets:
+        text = f"{label}: {pct:.0f}% used, resets in {duration(resets - now)}"
+    else:
+        text = f"{label}: {pct:.0f}% used"
+    return {
+        f"{prefix}Label": {"text": text},
+        f"{prefix}Bar": {"progress": max(0.0, min(pct / 100.0, 1.0)), "colour": bar_colour(pct)},
+    }
+
+
+# ---------------------------------------------------------------- activity
+
+def grid_start(today: date) -> date:
+    """Sunday that starts the first of the WEEKS columns (the last column is this week)."""
+    this_sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+    return this_sunday - timedelta(weeks=WEEKS - 1)
+
+
+def levels_for(costs: List[float]):
+    """Quartile thresholds over active days, so a few huge days don't flatten the rest."""
+    s = sorted(costs)
+    if not s:
+        return lambda c: 0
+    qs = [s[min(len(s) - 1, int(len(s) * f))] for f in (0.25, 0.5, 0.75)]
+    return lambda c: 1 + sum(c > q for q in qs)
+
+
+def cells(days: Dict[date, List[float]], today: date) -> List[dict]:
+    start = grid_start(today)
+    window = [start + timedelta(days=i) for i in range(WEEKS * 7)]
+    level = levels_for([days[d][0] for d in window if d in days and d <= today])
+    out = [None] * (WEEKS * 7)
+    for i, d in enumerate(window):
+        row, col = i % 7, i // 7
+        cell: dict = {"border": {"width": 0}}
+        if d > today:
+            cell["background"] = FUTURE
+            cell["tooltip"] = ""
+        elif d in days:
+            cost, n = days[d]
+            cell["background"] = LEVELS[level(cost) - 1]
+            cell["tooltip"] = f"{d:%a}, {short_date(d)} · {money(cost)} · {n:,} request{'s' if n != 1 else ''}"
+        else:
+            cell["background"] = EMPTY
+            cell["tooltip"] = f"{d:%a}, {short_date(d)} · no activity"
+        if d == today:
+            cell["border"] = {"width": 1, "colour": TODAY_BORDER}
+            cell["tooltip"] = "Today · " + cell["tooltip"].split(" · ", 1)[1]
+        out[row * WEEKS + col] = cell  # grid fills row by row: one row per weekday
+    return out
+
+
+def month_row(today: date) -> dict:
+    """Month names along the top, each starting above the first week whose Sunday is in that month."""
+    start = grid_start(today)
+    starts = [c for c in range(WEEKS) if (start + timedelta(weeks=c)).day <= 7]
+    if not starts or starts[0] != 0:
+        starts.insert(0, 0)  # the month already under way in the first column
+    comps: List[dict] = [{"type": "view", "constraints": {"size": {"width": DAY_W + DAY_GAP}}}]
+    for i, col in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else WEEKS
+        span = end - col
+        width = span * (CELL + GAP) - (GAP if end == WEEKS else 0)
+        comps.append({
+            "type": "label",
+            "text": f"{start + timedelta(weeks=col):%b}" if span >= 2 else "",  # one column is too narrow
+            "colour": "secondaryLabelColor",
+            "font": AXIS_FONT,
+            "linebreak": "clip",
+            "constraints": {"size": {"width": width}},
+        })
+    return {
+        "id": "monthRow",
+        "type": "view",
+        "layout": "inline",
+        "direction": "horizontal",
+        "constraints": {"region": "top", "size": {"height": MONTH_H}, "insets": {"bottom": MONTH_GAP}},
+        "components": comps,
+    }
+
+
+def heatmap_view(cell_props: List[dict], today: date) -> dict:
+    comps = []
+    for i, props in enumerate(cell_props):
+        comp = {"id": f"cell{i}", "type": "view", "cornerradius": 3}
+        comp.update(props)
+        comps.append(comp)
+    weekdays = {
+        "type": "view",
+        "layout": "grid",
+        "rows": 7,
+        "cols": 1,
+        "spacing": GAP,
+        "constraints": {"region": "left", "size": {"width": DAY_W}, "insets": {"right": DAY_GAP}},
+        "components": [
+            {
+                "type": "label",
+                "text": text,
+                "colour": "secondaryLabelColor",
+                "font": AXIS_FONT,
+                "textalign": "right",
+                "constraints": {"position": "right"},
+            }
+            for text in WEEKDAY_LABELS
+        ],
+    }
+    grid = {
+        "type": "view",
+        "layout": "grid",
+        "rows": 7,
+        "cols": WEEKS,
+        "spacing": GAP,
+        "constraints": {"region": "centre", "size": {"width": GRID_W, "height": GRID_H}},
+        "components": comps,
+    }
+    return {
+        "type": "view",
+        "layout": "border",
+        "constraints": {"size": {"width": HEAT_W, "height": HEAT_H}, "position": "centre"},
+        "components": [month_row(today), weekdays, grid],
+    }
+
+
+# ---------------------------------------------------------------- main
+
+def tab(selected: bool) -> dict:
+    if selected:
+        return {"bordered": True, "contenttintcolour": None, "font": {"size": 12, "weight": "semibold"}}
+    return {"bordered": False, "contenttintcolour": "secondaryLabelColor", "font": {"size": 12, "weight": "regular"}}
+
+
+def build(mode: str, tool: str) -> dict:
+    now = usage.now()
+    today = datetime.fromtimestamp(now).date()
+
+    ids: Dict[str, dict] = {
+        "title": {"text": TITLES[tool]},
+        "tabClaude": tab(tool == "claude"),
+        "tabCodex": tab(tool == "codex"),
+    }
+
+    zstd_missing = False
+    if tool == "codex":
+        requests, limits, zstd_missing = codex.scan()
+        ids["title"]["tooltip"] = f"{limits['plan'].title()} plan" if limits and limits.get("plan") else ""
+        ids.update(limit_rows(limits, now, "no Codex sessions yet"))
+    else:
+        cfg = usage.config_dir()
+        requests, rejections = usage.collect(cfg)
+        limits = usage.load_limits(cfg, rejections, now)
+        ids["title"]["tooltip"] = ""
+        ids.update(limit_rows(limits, now, "no data yet"))
+
+    days = usage.daily_totals(requests)
+    start = grid_start(today)
+    in_window = {d: v for d, v in days.items() if start <= d <= today}
+    total = sum(v[0] for v in in_window.values())
+    all_time = sum(v[0] for v in days.values())
+    first = min(days) if days else None
+
+    streak = usage.current_streak(days, today)
+    ids["streakLabel"] = {
+        "text": f"🔥 {streak}" if streak else "",
+        "tooltip": f"{streak}-day streak" if streak else "",
+    }
+    ids["costLabel"] = {
+        "text": money(total),
+        "tooltip": (f"All time: {money(all_time)} since {first:%b} {first.day}, {first.year}" if first else ""),
+    }
+    ids["weeksLabel"] = {"text": f"{WEEKS} weeks"}
+    ids["activeDays"] = {"text": str(len(in_window))}
+    if in_window:
+        busiest = max(in_window, key=lambda d: in_window[d][0])
+        ids["busiestDay"] = {"text": f"{short_date(busiest)} · {money(in_window[busiest][0])}"}
+    else:
+        ids["busiestDay"] = {"text": "–"}
+    t = days.get(today)
+    ids["todayLabel"] = {"text": f"{money(t[0])} · {t[1]:,} req" if t else "–"}
+
+    if zstd_missing:
+        ids["footer"] = {"text": "Some Codex sessions are compressed: install zstd (brew install zstd) to count them"}
+    elif limits and limits.get("updated_at"):
+        updated = ago(now - float(limits["updated_at"]))
+        ids["footer"] = {"text": f"Updated {updated} (limits from {LIMITS_SOURCE[tool]}, cost is an API-price estimate)"}
+    elif tool == "codex":
+        ids["footer"] = {"text": "No limits yet: Codex records them with each request · cost is an API-price estimate"}
+    else:
+        ids["footer"] = {
+            "text": "No limits yet: they appear once Claude Code's status line runs (Pro/Max plans) · cost is an API-price estimate"
+        }
+
+    variables = {"tool": tool, "usage_url": USAGE_URLS[tool]}
+    props = cells(days, today)
+    if mode == "preload":
+        return {"variables": variables, "update": {"ids": ids}, "replace": {"ids": {"heatmap": heatmap_view(props, today)}}}
+    for i, p in enumerate(props):
+        ids[f"cell{i}"] = p
+    # Months shift when a new week starts while the window is open.
+    return {
+        "variables": variables,
+        "update": {"relayout": True, "ids": ids},
+        "replace": {"ids": {"monthRow": month_row(today)}},
+    }
+
+
+def pick_tool(mode: str) -> str:
+    current = os.environ.get("tool") if os.environ.get("tool") in TOOLS else "claude"
+    if len(sys.argv) > 2 and sys.argv[2] in TOOLS:
+        return sys.argv[2]
+    # "usage codex" / "usage claude" picks the tab at launch; later pulses follow the tab you're on.
+    launch = (os.environ.get("launch_tool") or "").strip().lower()
+    if mode == "preload" and launch in TOOLS:
+        return launch
+    if mode == "toggle":
+        return "codex" if current == "claude" else "claude"
+    return current
+
+
+def main() -> None:
+    mode = sys.argv[1] if len(sys.argv) > 1 else "preload"
+    try:
+        out = build(mode, pick_tool(mode))
+    except Exception as exc:  # show the problem in the UI rather than an empty window
+        out = {"update": {"ids": {"footer": {"text": f"Error: {type(exc).__name__}: {exc}"}}}}
+    print(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
+
+
+if __name__ == "__main__":
+    main()

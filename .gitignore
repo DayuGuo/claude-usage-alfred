@@ -1,0 +1,12 @@
+# Alfred saves your "Configure Workflow" values (keyword, folder paths) here
+prefs.plist
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Built packages
+*.alfredworkflow

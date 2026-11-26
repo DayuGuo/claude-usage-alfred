@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>bundleid</key>
+	<string>local.claude-code.usage</string>
+	<key>category</key>
+	<string>Productivity</string>
+	<key>connections</key>
+	<dict>
+		<key>A1C0FFEE-0001-4C1A-9D5E-000000000001</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>A1C0FFEE-0001-4C1A-9D5E-000000000004</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>A1C0FFEE-0001-4C1A-9D5E-000000000002</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>A1C0FFEE-0001-4C1A-9D5E-000000000004</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>A1C0FFEE-0001-4C1A-9D5E-000000000003</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>A1C0FFEE-0001-4C1A-9D5E-000000000004</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+	</dict>
+	<key>createdby</key>
+	<string></string>
+	<key>description</key>
+	<string>Claude and Codex plan limits and activity</string>
+	<key>disabled</key>
+	<false/>
+	<key>name</key>
+	<string>Claude Usage</string>
+	<key>objects</key>
+	<array>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>keyword</key>
+				<string>{var:keyword}</string>
+				<key>subtext</key>
+				<string>Plan limits, activity and API-price cost · add codex or claude to pick a tab</string>
+				<key>text</key>
+				<string>Claude usage</string>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.keyword</string>
+			<key>uid</key>
+			<string>A1C0FFEE-0001-4C1A-9D5E-000000000001</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>launchmode</key>
+				<integer>0</integer>
+				<key>path</key>
+				<string>usage.alfredui</string>
+				<key>stackview</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.userinterface.alfredui</string>
+			<key>uid</key>
+			<string>A1C0FFEE-0001-4C1A-9D5E-000000000004</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>action</key>
+				<integer>0</integer>
+				<key>argument</key>
+				<integer>0</integer>
+				<key>focusedappvariable</key>
+				<false/>
+				<key>focusedappvariablename</key>
+				<string></string>
+				<key>hotkey</key>
+				<integer>0</integer>
+				<key>hotmod</key>
+				<integer>0</integer>
+				<key>leftcursor</key>
+				<false/>
+				<key>modsmode</key>
+				<integer>0</integer>
+				<key>relatedAppsMode</key>
+				<integer>0</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.hotkey</string>
+			<key>uid</key>
+			<string>A1C0FFEE-0001-4C1A-9D5E-000000000002</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>availableviaurlhandler</key>
+				<false/>
+				<key>triggerid</key>
+				<string>show</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.external</string>
+			<key>uid</key>
+			<string>A1C0FFEE-0001-4C1A-9D5E-000000000003</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+	</array>
+	<key>readme</key>
+	<string>Shows your Claude and Codex plan limits and activity in an Alfred UI.
+
+Type the keyword (default: usage), or set a hotkey on the Hotkey trigger. usage codex / usage claude opens that tab.
+
+• 5-hour session and weekly limits: how much you've used and when each window resets
+• Activity: a 13-week heatmap of Claude Code usage, with your current streak 🔥
+• Cost: what the same tokens would cost at Claude API list prices (an estimate; your plan is not billed this way)
+
+Switch between Claude and Codex with the tabs, ⌘1 / ⌘2 or ⇥ (the last one you viewed opens next time).
+↩ opens the usage settings page · ⌘R refreshes (it also refreshes every 30s while open) · hover a day for its cost
+
+Where the numbers come from
+Limits are reported to Claude Code's status line, and nothing else saves them, so this workflow ships statusline.py: it prints a compact status line and saves the latest limits to ~/.claude/usage-limits.json. Install it with:
+  cp statusline.py ~/.claude/statusline-usage.py
+and in ~/.claude/settings.json:
+  "statusLine": {"type": "command", "command": "/usr/bin/python3 ~/.claude/statusline-usage.py"}
+Limits are as fresh as your last Claude Code message (usage from claude.ai or the desktop app shows up the next time Claude Code talks to the API). They only exist on Pro, Max and Ultra plans.
+
+Activity and cost are read from Claude Code transcripts in ~/.claude/projects (every API response records its model and token counts). Requests are de-duplicated across resumed and forked sessions, and priced with input, output, cache-write (5m / 1h) and cache-read rates per model, fast mode and web searches included.
+
+Codex: limits, activity and cost all come from Codex's own session files in ~/.codex/sessions (each API response records its tokens, and the plan limits ride along), priced at OpenAI API rates. Limits are as of your last Codex request. Compressed sessions (.jsonl.zst) need zstd: brew install zstd.
+
+Requires /usr/bin/python3 (ships with macOS Command Line Tools).</string>
+	<key>uidata</key>
+	<dict>
+		<key>A1C0FFEE-0001-4C1A-9D5E-000000000001</key>
+		<dict>
+			<key>xpos</key>
+			<integer>50</integer>
+			<key>ypos</key>
+			<integer>60</integer>
+		</dict>
+		<key>A1C0FFEE-0001-4C1A-9D5E-000000000002</key>
+		<dict>
+			<key>note</key>
+			<string>Set a hotkey to open Claude usage</string>
+			<key>xpos</key>
+			<integer>50</integer>
+			<key>ypos</key>
+			<integer>200</integer>
+		</dict>
+		<key>A1C0FFEE-0001-4C1A-9D5E-000000000003</key>
+		<dict>
+			<key>note</key>
+			<string>External Trigger "show"</string>
+			<key>xpos</key>
+			<integer>50</integer>
+			<key>ypos</key>
+			<integer>340</integer>
+		</dict>
+		<key>A1C0FFEE-0001-4C1A-9D5E-000000000004</key>
+		<dict>
+			<key>note</key>
+			<string>Claude usage, shown inside Alfred</string>
+			<key>xpos</key>
+			<integer>300</integer>
+			<key>ypos</key>
+			<integer>200</integer>
+		</dict>
+	</dict>
+	<key>userconfigurationconfig</key>
+	<array>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>usage</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<true/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>Keyword that shows your Claude usage.</string>
+			<key>label</key>
+			<string>Keyword</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>keyword</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>~/.claude</string>
+				<key>placeholder</key>
+				<string>~/.claude</string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>Where Claude Code keeps its transcripts and where the status line saves your limits. Change it only if you use CLAUDE_CONFIG_DIR.</string>
+			<key>label</key>
+			<string>Claude config folder</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>claude_config_dir</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>~/.codex</string>
+				<key>placeholder</key>
+				<string>~/.codex</string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>Where Codex keeps its sessions. Change it only if you use CODEX_HOME.</string>
+			<key>label</key>
+			<string>Codex folder</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>codex_home</string>
+		</dict>
+	</array>
+	<key>variablesdontexport</key>
+	<array/>
+	<key>version</key>
+	<string>1.0.0</string>
+	<key>webaddress</key>
+	<string></string>
+</dict>
+</plist>
