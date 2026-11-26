@@ -417,7 +417,7 @@ Requires /usr/bin/python3 (ships with macOS Command Line Tools).</string>
 		<string>claude_subscription_cycle_end</string>
 	</array>
 	<key>version</key>
-	<string>1.0.0</string>
+	<string>1.1.0-rc.1</string>
 	<key>webaddress</key>
 	<string></string>
 </dict>
